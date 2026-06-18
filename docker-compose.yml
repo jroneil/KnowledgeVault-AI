@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: knowledgevault-db
+    environment:
+      POSTGRES_DB: knowledgevault
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - knowledgevault-network
+
+  backend:
+    build:
+      context: ./backend/document-service
+      dockerfile: Dockerfile
+    container_name: knowledgevault-backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/knowledgevault
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      JWT_SECRET: KnowledgeVault-AI-Secret-Key-Change-In-Production-Min-256-Bits
+      JWT_EXPIRATION: 86400000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - storage_data:/app/storage
+    networks:
+      - knowledgevault-network
+    restart: unless-stopped
+
+  # Future services to be added in subsequent phases:
+  # ai-service:
+  #   build:
+  #     context: ./ai-service
+  #     dockerfile: Dockerfile
+  #   container_name: knowledgevault-ai
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/knowledgevault
+  #     INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - knowledgevault-network
+
+  # frontend:
+  #   build:
+  #     context: ./frontend/knowledgevault-ui
+  #     dockerfile: Dockerfile
+  #   container_name: knowledgevault-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:8080
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - knowledgevault-network
+
+volumes:
+  postgres_data:
+    driver: local
+  storage_data:
+    driver: local
+
+networks:
+  knowledgevault-network:
+    driver: bridge
