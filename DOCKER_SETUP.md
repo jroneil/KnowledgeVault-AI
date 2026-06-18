@@ -466,7 +466,7 @@ For issues or questions:
 1. Check this documentation
 2. Check logs: `docker compose logs`
 3. Review Phase 1 Implementation Summary
-4. Open an issue on GitHub
+4. Contact the project team directly
 
 ---
 

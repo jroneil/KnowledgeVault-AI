@@ -223,21 +223,18 @@ mvnw.cmd spring-boot:run
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+This is a private project. Contribution guidelines will be established as the project matures.
 
 ## License
 
-This project is licensed under the MIT License.
+This is a private project. All rights reserved.
 
 ## Support
 
 For issues and questions:
 - Check the [documentation](docs/)
 - Review [Docker Setup Guide](DOCKER_SETUP.md)
-- Open an issue on GitHub
+- Contact the project team directly
 
 ## Roadmap
 
