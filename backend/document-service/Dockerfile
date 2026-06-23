@@ -23,11 +23,13 @@ WORKDIR /app
 # Copy the built JAR from builder stage
 COPY --from=builder /app/target/document-service-*.jar app.jar
 
-# Create storage directory for uploaded files
-RUN mkdir -p /app/storage
-
 # Add a user to run the application (not root)
 RUN addgroup -S spring && adduser -S spring -G spring
+
+# Create storage directory with proper permissions
+RUN mkdir -p /app/storage && chown -R spring:spring /app/storage
+
+# Switch to non-root user
 USER spring:spring
 
 # Expose the port
