@@ -1,12 +1,10 @@
 package com.kva.document_service.documents;
 
+import com.kva.document_service.auth.AuthenticatedUserService;
 import com.kva.document_service.documents.dto.DocumentUploadResponse;
 import com.kva.document_service.documents.dto.UpdateDocumentRequest;
 import com.kva.document_service.documents.dto.UploadDocumentRequest;
 import com.kva.document_service.versions.VersionService;
-import com.kva.document_service.versions.dto.VersionResponse;
-import com.kva.document_service.users.UserRepository;
-import com.kva.document_service.users.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,13 +30,16 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final VersionService versionService;
-    private final UserRepository userRepository;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public ResponseEntity<Map<String, Object>> listDocuments(
             @RequestParam(required = false) Long collectionId,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size) {
+        validatePageRequest(page, size);
         List<Document> documents;
 
         if (collectionId != null) {
@@ -49,9 +50,17 @@ public class DocumentController {
             documents = documentService.listDocuments();
         }
 
+        int fromIndex = (int) Math.min((long) page * size, documents.size());
+        int toIndex = Math.min(fromIndex + size, documents.size());
+        List<Document> pageContent = documents.subList(fromIndex, toIndex);
+
         Map<String, Object> response = new HashMap<>();
-        response.put("documents", documents);
-        response.put("count", documents.size());
+        response.put("documents", pageContent);
+        response.put("count", pageContent.size());
+        response.put("totalElements", documents.size());
+        response.put("page", page);
+        response.put("size", size);
+        response.put("totalPages", (documents.size() + size - 1) / size);
         response.put("collectionId", collectionId);
         response.put("status", status);
 
@@ -68,10 +77,10 @@ public class DocumentController {
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR')")
     public ResponseEntity<DocumentUploadResponse> uploadDocument(
-            @RequestPart("metadata") UploadDocumentRequest metadata,
+            @Valid @RequestPart("metadata") UploadDocumentRequest metadata,
             @RequestPart("file") MultipartFile file,
             Authentication authentication) {
-        Long userId = getUserIdFromAuthentication(authentication);
+        Long userId = authenticatedUserService.requireUserId(authentication);
 
         DocumentUploadResponse response = documentService.uploadDocument(metadata, file, userId);
 
@@ -85,7 +94,7 @@ public class DocumentController {
             @PathVariable Long id,
             @Valid @RequestBody UpdateDocumentRequest request,
             Authentication authentication) {
-        Long userId = getUserIdFromAuthentication(authentication);
+        Long userId = authenticatedUserService.requireUserId(authentication);
         Document updated = documentService.updateDocument(id, request, userId);
 
         log.info("Document updated: {} by user: {}", id, userId);
@@ -97,7 +106,7 @@ public class DocumentController {
     public ResponseEntity<Map<String, String>> deleteDocument(
             @PathVariable Long id,
             Authentication authentication) {
-        Long userId = getUserIdFromAuthentication(authentication);
+        Long userId = authenticatedUserService.requireUserId(authentication);
         documentService.deleteDocument(id, userId);
 
         Map<String, String> response = new HashMap<>();
@@ -133,41 +142,6 @@ public class DocumentController {
                 .body(new org.springframework.core.io.ByteArrayResource(fileContent));
     }
 
-    @GetMapping("/{id}/versions")
-    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
-    public ResponseEntity<List<VersionResponse>> getDocumentVersions(@PathVariable Long id) {
-        var versions = versionService.getVersionHistory(id);
-
-        List<VersionResponse> response = versions.stream()
-                .map(this::mapToVersionResponse)
-                .toList();
-
-        return ResponseEntity.ok(response);
-    }
-
-    @PostMapping(value = "/{id}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR')")
-    public ResponseEntity<Map<String, Object>> uploadNewVersion(
-            @PathVariable Long id,
-            @RequestPart("file") MultipartFile file,
-            Authentication authentication) {
-        Long userId = getUserIdFromAuthentication(authentication);
-
-        var newVersion = versionService.uploadNewVersion(id, file, userId);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("versionId", newVersion.getId());
-        response.put("documentId", newVersion.getDocumentId());
-        response.put("versionNumber", newVersion.getVersionNumber());
-        response.put("fileName", newVersion.getFileName());
-        response.put("message", "New version uploaded successfully");
-
-        log.info("New version uploaded: {} for document: {} by user: {}",
-                newVersion.getVersionNumber(), id, userId);
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
     @GetMapping("/search")
     @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public ResponseEntity<Map<String, Object>> searchDocuments(@RequestParam String searchTerm) {
@@ -190,32 +164,11 @@ public class DocumentController {
         return ResponseEntity.ok(stats);
     }
 
-    private Long getUserIdFromAuthentication(Authentication authentication) {
-        if (authentication == null) {
-            return 1L;
+    private void validatePageRequest(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new com.kva.document_service.common.exceptions.BusinessException(
+                    "Page must be at least 0 and size must be between 1 and 100"
+            );
         }
-        return userRepository.findByUsername(authentication.getName())
-                .map(User::getId)
-                .orElse(1L);
-    }
-
-    private VersionResponse mapToVersionResponse(DocumentVersion version) {
-        String uploader = "User";
-        if (version.getUploadedBy() != null) {
-            uploader = userRepository.findById(version.getUploadedBy())
-                    .map(User::getUsername)
-                    .orElse("User");
-        }
-        return VersionResponse.builder()
-                .id(version.getId())
-                .documentId(version.getDocumentId())
-                .versionNumber(version.getVersionNumber())
-                .fileName(version.getFileName())
-                .fileSize(version.getFileSize())
-                .mimeType(version.getMimeType())
-                .uploadDate(version.getUploadDate())
-                .isCurrent(version.getIsCurrent())
-                .uploadedBy(uploader)
-                .build();
     }
 }

@@ -8,7 +8,7 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select, text
 from sqlalchemy.sql import func
 
 from app.core.config import settings
@@ -24,7 +24,7 @@ class DatabaseService:
     def __init__(self):
         self.engine = create_async_engine(
             settings.DATABASE_URL,
-            echo=settings.DEBUG,
+            echo=settings.APP_DEBUG,
             pool_pre_ping=True,
             pool_size=10,
             max_overflow=20
@@ -44,7 +44,7 @@ class DatabaseService:
         """Check database connection health."""
         try:
             async with self.async_session() as session:
-                await session.execute(func.now())
+                await session.execute(text("SELECT 1"))
                 return True
         except Exception:
             return False

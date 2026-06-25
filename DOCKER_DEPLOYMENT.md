@@ -45,7 +45,7 @@ This will start:
   - `SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/knowledgevault`
   - `SPRING_DATASOURCE_USERNAME=postgres`
   - `SPRING_DATASOURCE_PASSWORD=postgres`
-  - `JWT_SECRET=KnowledgeVault-AI-Secret-Key-Change-In-Production-Min-256-Bits`
+  - `JWT_SECRET=<replace-with-at-least-32-random-characters>`
   - `JWT_EXPIRATION=86400000`
 - **Volumes:** `storage_data` for document storage
 - **Dependencies:** PostgreSQL (with health check)

@@ -25,7 +25,7 @@ public class SemanticSearchController {
     private final DocumentRepository documentRepository;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public SemanticSearchResponse semanticSearch(@RequestBody SemanticSearchRequest request) {
         log.info("Semantic search request: query='{}', limit={}, threshold={}", 
             request.getQuery(), request.getLimit(), request.getThreshold());
@@ -65,7 +65,7 @@ public class SemanticSearchController {
     }
 
     @PostMapping("/rag")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public RAGResponse ragQuery(@RequestBody RAGRequest request) {
         log.info("RAG query request: query='{}', topK={}", request.getQuery(), request.getTopK());
 
@@ -84,7 +84,7 @@ public class SemanticSearchController {
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public SearchStats getSearchStats() {
         log.info("Getting search statistics");
 

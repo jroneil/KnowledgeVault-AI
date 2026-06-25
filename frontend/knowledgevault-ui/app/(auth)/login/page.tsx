@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { apiFetch, login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:8080/api/v1/auth/login", {
+      const response = await apiFetch("/api/v1/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -44,8 +44,8 @@ export default function LoginPage() {
         email: data.email,
         roles: data.roles,
       });
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
     } finally {
       setIsSubmitting(false);
     }

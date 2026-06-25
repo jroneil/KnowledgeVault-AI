@@ -7,11 +7,10 @@ import { useAuth } from '../../../context/AuthContext'
 
 export default function UploadVersionPage() {
   const [file, setFile] = useState<File | null>(null)
-  const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const { token } = useAuth()
+  const { apiFetch, token } = useAuth()
   const router = useRouter()
   const params = useParams()
   const documentId = params.id as string
@@ -45,13 +44,10 @@ export default function UploadVersionPage() {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch(
-        `http://localhost:8080/api/v1/documents/${documentId}/versions`,
+      const response = await apiFetch(
+        `/api/v1/documents/${documentId}/versions`,
         {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
           body: formData
         }
       )

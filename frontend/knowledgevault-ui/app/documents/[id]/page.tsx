@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../context/AuthContext'
@@ -35,27 +35,14 @@ export default function DocumentDetailPage() {
   const [metadata, setMetadata] = useState<DocumentMetadata | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const { token } = useAuth()
+  const { apiFetch, token } = useAuth()
   const router = useRouter()
   const params = useParams()
   const documentId = params.id as string
 
-  useEffect(() => {
-    if (!token) {
-      router.push('/login')
-      return
-    }
-    fetchDocumentData()
-  }, [token, router, documentId])
-
-  const fetchDocumentData = async () => {
+  const fetchDocumentData = useCallback(async () => {
     try {
-      // Fetch document details
-      const docResponse = await fetch(`http://localhost:8080/api/v1/documents/${documentId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const docResponse = await apiFetch(`/api/v1/documents/${documentId}`)
 
       if (!docResponse.ok) {
         throw new Error('Failed to fetch document')
@@ -64,12 +51,7 @@ export default function DocumentDetailPage() {
       const docData = await docResponse.json()
       setDocument(docData)
 
-      // Fetch document metadata
-      const metaResponse = await fetch(`http://localhost:8080/api/v1/documents/${documentId}/metadata`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const metaResponse = await apiFetch(`/api/v1/documents/${documentId}/metadata`)
 
       if (metaResponse.ok) {
         const metaData = await metaResponse.json()
@@ -80,15 +62,22 @@ export default function DocumentDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [apiFetch, documentId])
+
+  useEffect(() => {
+    if (!token) {
+      router.push('/login')
+      return
+    }
+    const timeoutId = window.setTimeout(() => {
+      void fetchDocumentData()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [token, router, fetchDocumentData])
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/documents/${documentId}/download`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await apiFetch(`/api/v1/documents/${documentId}/download`)
 
       if (!response.ok) {
         throw new Error('Failed to download document')
@@ -114,12 +103,8 @@ export default function DocumentDetailPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/documents/${documentId}`, {
+      const response = await apiFetch(`/api/v1/documents/${documentId}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           ...document,
           status: 'ARCHIVED'

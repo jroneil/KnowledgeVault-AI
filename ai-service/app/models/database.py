@@ -74,7 +74,7 @@ class Embedding(Base):
     chunk_id = Column(BigInteger, ForeignKey('document_chunks.id', ondelete='CASCADE'), nullable=False)
     model_name = Column(String(100), nullable=False)
     model_version = Column(String(50), nullable=True)
-    embedding = Column(Vector(1024), nullable=False)  # Default dimension for nomic-embed-text
+    embedding = Column(Vector(768), nullable=False)
     dimension = Column(Integer, nullable=False)
     created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=False)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

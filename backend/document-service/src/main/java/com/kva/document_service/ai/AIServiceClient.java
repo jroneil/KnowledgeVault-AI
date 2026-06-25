@@ -1,7 +1,7 @@
 package com.kva.document_service.ai;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kva.document_service.ai.dto.*;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +17,7 @@ import java.util.Map;
  * Handles document ingestion requests and status polling.
  */
 @Service
+@RequiredArgsConstructor
 public class AIServiceClient {
     
     private static final Logger logger = LoggerFactory.getLogger(AIServiceClient.class);
@@ -24,16 +25,10 @@ public class AIServiceClient {
     @Value("${ai-service.base-url:http://ai-service:8000}")
     private String aiServiceBaseUrl;
     
-    @Value("${ai-service.internal-api-key:9XfK2mQ7vLp8Rz4NcT1wHy6BjDs3UaEe}")
+    @Value("${ai-service.internal-api-key}")
     private String internalApiKey;
     
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
-    
-    public AIServiceClient() {
-        this.restTemplate = new RestTemplate();
-        this.objectMapper = new ObjectMapper();
-    }
     
     /**
      * Trigger document ingestion process
@@ -113,7 +108,7 @@ public class AIServiceClient {
      */
     public boolean isHealthy() {
         try {
-            String url = aiServiceBaseUrl + "/health/detailed";
+            String url = aiServiceBaseUrl + "/api/v1/health/detailed";
             
             HttpHeaders headers = createHeaders();
             HttpEntity<Void> entity = new HttpEntity<>(headers);

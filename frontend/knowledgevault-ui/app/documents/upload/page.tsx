@@ -31,7 +31,7 @@ export default function DocumentUploadPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const { token } = useAuth()
+  const { apiFetch, token } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -39,29 +39,26 @@ export default function DocumentUploadPage() {
       router.push('/login')
       return
     }
-    fetchCollections()
-  }, [token, router])
-
-  const fetchCollections = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/v1/collections', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+    let cancelled = false
+    apiFetch('/api/v1/collections')
+      .then(async response => {
+        if (!response.ok) throw new Error('Failed to fetch collections')
+        return response.json()
       })
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch collections')
-      }
-      
-      const data = await response.json()
-      setCollections(data.filter((c: Collection) => c.isActive))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+      .then((data: Collection[] | { collections: Collection[] }) => {
+        const collections = Array.isArray(data) ? data : data.collections
+        if (!cancelled) setCollections(collections.filter(collection => collection.isActive))
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'An error occurred')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }
+  }, [token, router, apiFetch])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -94,22 +91,19 @@ export default function DocumentUploadPage() {
     try {
       const formDataToSend = new FormData()
       formDataToSend.append('file', file)
-      formDataToSend.append('collectionId', formData.collectionId)
-      formDataToSend.append('title', formData.title)
-      if (formData.description) formDataToSend.append('description', formData.description)
-      if (formData.product) formDataToSend.append('product', formData.product)
-      if (formData.revision) formDataToSend.append('revision', formData.revision)
-      if (formData.department) formDataToSend.append('department', formData.department)
-      if (formData.manufacturer) formDataToSend.append('manufacturer', formData.manufacturer)
-      if (formData.category) formDataToSend.append('category', formData.category)
-      if (formData.tags) formDataToSend.append('tags', formData.tags)
-      if (formData.effectiveDate) formDataToSend.append('effectiveDate', formData.effectiveDate)
+      formDataToSend.append(
+        'metadata',
+        new Blob(
+          [JSON.stringify({
+            ...formData,
+            collectionId: Number(formData.collectionId)
+          })],
+          { type: 'application/json' }
+        )
+      )
 
-      const response = await fetch('http://localhost:8080/api/v1/documents/upload', {
+      const response = await apiFetch('/api/v1/documents/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
         body: formDataToSend
       })
 

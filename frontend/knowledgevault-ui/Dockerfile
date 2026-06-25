@@ -3,6 +3,7 @@ FROM node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
+ENV BACKEND_INTERNAL_URL=http://backend:8080
 
 # Copy package files
 COPY package*.json ./
@@ -42,6 +43,9 @@ EXPOSE 3000
 
 # Set environment to production
 ENV NODE_ENV=production
+ENV BACKEND_INTERNAL_URL=http://backend:8080
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
 # Start the application
 CMD ["node", "server.js"]

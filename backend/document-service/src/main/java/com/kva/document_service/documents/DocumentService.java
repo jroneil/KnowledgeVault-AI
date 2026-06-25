@@ -50,6 +50,7 @@ public class DocumentService {
             throw new BusinessException("File is required for document upload");
         }
 
+        String storedFilePath = null;
         try {
             // Create document record
             Document document = Document.builder()
@@ -65,7 +66,7 @@ public class DocumentService {
             log.info("Created document: {} in collection: {}", savedDocument.getId(), collection.getId());
 
             // Store file and create version record
-            String filePath = fileStorageService.storeOriginalFile(
+            storedFilePath = fileStorageService.storeOriginalFile(
                     file,
                     collection.getId(),
                     savedDocument.getId(),
@@ -75,8 +76,8 @@ public class DocumentService {
             DocumentVersion version = DocumentVersion.builder()
                     .documentId(savedDocument.getId())
                     .versionNumber(1)
-                    .fileName(file.getOriginalFilename())
-                    .filePath(filePath)
+                    .fileName(fileStorageService.sanitizeFilename(file.getOriginalFilename()))
+                    .filePath(storedFilePath)
                     .fileSize(file.getSize())
                     .mimeType(file.getContentType())
                     .uploadedBy(userId)
@@ -107,6 +108,14 @@ public class DocumentService {
                     .build();
 
         } catch (Exception e) {
+            if (storedFilePath != null) {
+                try {
+                    fileStorageService.deleteFile(storedFilePath);
+                } catch (Exception cleanupException) {
+                    log.warn("Failed to clean up stored file after upload rollback: {}",
+                            storedFilePath, cleanupException);
+                }
+            }
             log.error("Failed to upload document: {}", request.getTitle(), e);
             throw new BusinessException("Failed to upload document: " + e.getMessage(), e);
         }
@@ -149,10 +158,7 @@ public class DocumentService {
         document.setStatus("DELETED");
         documentRepository.update(document);
 
-        // Delete files from storage
-        fileStorageService.deleteDocumentFiles(document.getCollectionId(), id);
-
-        log.info("Deleted document: {} by user: {}", id, userId);
+        log.info("Soft-deleted document: {} by user: {}", id, userId);
     }
 
     public List<Document> listDocuments() {

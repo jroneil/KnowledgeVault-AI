@@ -21,8 +21,20 @@ spring:
 
   security:
     jwt:
-      secret: ${JWT_SECRET:KnowledgeVault-AI-Secret-Key-Change-In-Production-Min-256-Bits}
+      secret: ${JWT_SECRET:development-only-jwt-key-change-me-minimum-256-bits}
       expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
+
+app:
+  environment: ${ENVIRONMENT:development}
+
+ai-service:
+  base-url: ${AI_SERVICE_BASE_URL:http://ai-service:8000}
+  internal-api-key: ${INTERNAL_API_KEY:development-only-change-me}
+  connect-timeout-ms: ${AI_SERVICE_CONNECT_TIMEOUT_MS:3000}
+  read-timeout-ms: ${AI_SERVICE_READ_TIMEOUT_MS:30000}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
 
 # File storage configuration
 file-storage:

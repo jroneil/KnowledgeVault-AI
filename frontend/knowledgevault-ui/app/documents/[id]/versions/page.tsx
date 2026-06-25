@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../../context/AuthContext'
@@ -28,42 +28,21 @@ export default function DocumentVersionsPage() {
   const [document, setDocument] = useState<Document | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const { token } = useAuth()
+  const { apiFetch, token } = useAuth()
   const router = useRouter()
   const params = useParams()
   const documentId = params.id as string
 
-  useEffect(() => {
-    if (!token) {
-      router.push('/login')
-      return
-    }
-    fetchVersionData()
-  }, [token, router, documentId])
-
-  const fetchVersionData = async () => {
+  const fetchVersionData = useCallback(async () => {
     try {
-      // Fetch document details
-      const docResponse = await fetch(`http://localhost:8080/api/v1/documents/${documentId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const docResponse = await apiFetch(`/api/v1/documents/${documentId}`)
 
       if (docResponse.ok) {
         const docData = await docResponse.json()
         setDocument(docData)
       }
 
-      // Fetch version history
-      const versionsResponse = await fetch(
-        `http://localhost:8080/api/v1/documents/${documentId}/versions`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      )
+      const versionsResponse = await apiFetch(`/api/v1/documents/${documentId}/versions`)
 
       if (!versionsResponse.ok) {
         throw new Error('Failed to fetch versions')
@@ -76,17 +55,23 @@ export default function DocumentVersionsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [apiFetch, documentId])
+
+  useEffect(() => {
+    if (!token) {
+      router.push('/login')
+      return
+    }
+    const timeoutId = window.setTimeout(() => {
+      void fetchVersionData()
+    }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [token, router, fetchVersionData])
 
   const handleDownload = async (versionNumber: number) => {
     try {
-      const response = await fetch(
-        `http://localhost:8080/api/v1/documents/${documentId}/versions/${versionNumber}/download`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
+      const response = await apiFetch(
+        `/api/v1/documents/${documentId}/versions/${versionNumber}/download`
       )
 
       if (!response.ok) {
@@ -113,13 +98,10 @@ export default function DocumentVersionsPage() {
     }
 
     try {
-      const response = await fetch(
-        `http://localhost:8080/api/v1/documents/${documentId}/versions/${versionNumber}/set-current`,
+      const response = await apiFetch(
+        `/api/v1/documents/${documentId}/versions/${versionNumber}/set-current`,
         {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          method: 'PUT'
         }
       )
 
@@ -128,7 +110,7 @@ export default function DocumentVersionsPage() {
       }
 
       // Refresh version data
-      fetchVersionData()
+      void fetchVersionData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Operation failed')
     }
@@ -140,13 +122,10 @@ export default function DocumentVersionsPage() {
     }
 
     try {
-      const response = await fetch(
-        `http://localhost:8080/api/v1/documents/${documentId}/versions/${versionId}`,
+      const response = await apiFetch(
+        `/api/v1/documents/${documentId}/versions/${versionId}`,
         {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          method: 'DELETE'
         }
       )
 
@@ -155,7 +134,7 @@ export default function DocumentVersionsPage() {
       }
 
       // Refresh version data
-      fetchVersionData()
+      void fetchVersionData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
     }

@@ -7,9 +7,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
+from sqlalchemy import distinct, select
 from sqlalchemy.sql import func
 
 from app.core.config import settings
+from app.models.database import DocumentChunk, Embedding
 from app.services.database_service import db_service
 from app.services.ollama_client import OllamaClient
 
@@ -17,7 +19,7 @@ from app.services.ollama_client import OllamaClient
 security = HTTPBearer()
 
 # Router
-router = APIRouter(prefix="/api/v1/search", tags=["search"])
+router = APIRouter()
 
 
 # Request/Response Models
@@ -101,6 +103,11 @@ async def generate_embedding(text: str) -> List[float]:
     client = OllamaClient()
     try:
         embedding = await client.generate_embedding(text)
+        if len(embedding) != settings.EMBEDDING_DIMENSION:
+            raise ValueError(
+                f"Embedding model returned {len(embedding)} dimensions; "
+                f"expected {settings.EMBEDDING_DIMENSION}"
+            )
         return embedding
     except Exception as e:
         raise HTTPException(
@@ -292,21 +299,18 @@ async def get_search_stats(token: str = Depends(verify_token)):
     """
     try:
         async with db_service.async_session() as session:
-            # Count total chunks
             chunk_count_result = await session.execute(
-                func.count().select_from(db_service.models.database.DocumentChunk)
+                select(func.count()).select_from(DocumentChunk)
             )
             total_chunks = chunk_count_result.scalar()
-            
-            # Count total embeddings
+
             embedding_count_result = await session.execute(
-                func.count().select_from(db_service.models.database.Embedding)
+                select(func.count()).select_from(Embedding)
             )
             total_embeddings = embedding_count_result.scalar()
-            
-            # Count unique documents
+
             doc_count_result = await session.execute(
-                func.func.count(func.func.distinct(db_service.models.database.DocumentChunk.document_id))
+                select(func.count(distinct(DocumentChunk.document_id)))
             )
             total_documents = doc_count_result.scalar()
         

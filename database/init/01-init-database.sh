@@ -1,10 +1,10 @@
 #!/bin/bash
 set -e
 
-echo "Initializing KnowledgeVault database..."
+echo "Preparing KnowledgeVault database for Flyway..."
 
-# This script is for any additional database initialization
-# that needs to happen before Flyway migrations run
-# Currently, Flyway handles all schema creation and migration
+# Application schema creation is owned exclusively by Flyway in the backend
+# service. Keep this directory free of versioned schema migrations so Docker's
+# initialization order cannot create tables before their dependencies exist.
 
-echo "Database initialization complete!"
+echo "Database preparation complete; Flyway will apply the schema."

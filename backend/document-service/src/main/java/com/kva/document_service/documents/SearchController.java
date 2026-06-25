@@ -25,7 +25,7 @@ public class SearchController {
     private final CollectionRepository collectionRepository;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public List<SearchResult> searchDocuments(
             @RequestParam(required = false) String title,
             @RequestParam(required = false) Long collection,
@@ -76,7 +76,7 @@ public class SearchController {
     }
 
     @GetMapping("/collections/{collectionId}/documents")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public List<SearchResult> searchInCollection(
             @PathVariable Long collectionId,
             @RequestParam(required = false) String title,

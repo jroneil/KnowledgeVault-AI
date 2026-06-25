@@ -1,10 +1,10 @@
 package com.kva.document_service.metadata;
 
+import com.kva.document_service.auth.AuthenticatedUserService;
+import com.kva.document_service.common.exceptions.ResourceNotFoundException;
 import com.kva.document_service.documents.DocumentRepository;
 import com.kva.document_service.metadata.dto.MetadataRequest;
 import com.kva.document_service.metadata.dto.MetadataSearchRequest;
-import com.kva.document_service.users.UserRepository;
-import com.kva.document_service.users.User;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,23 +25,18 @@ public class MetadataController {
 
     private final MetadataService metadataService;
     private final DocumentRepository documentRepository;
-    private final UserRepository userRepository;
+    private final AuthenticatedUserService authenticatedUserService;
 
     @GetMapping("/documents/{id}/metadata")
     @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public ResponseEntity<?> getDocumentMetadata(@PathVariable Long id) {
-        // Verify document exists
         if (!documentRepository.existsById(id)) {
-            Map<String, String> error = new HashMap<>();
-            error.put("message", "Document not found with id: " + id);
-            return ResponseEntity.status(404).body(error);
+            throw new ResourceNotFoundException("Document not found with id: " + id);
         }
 
-        if (metadataService.getMetadata(id).isPresent()) {
-            return ResponseEntity.ok().body(metadataService.getMetadata(id).get());
-        } else {
-            return ResponseEntity.ok().body(Map.of("message", "No metadata found for document"));
-        }
+        return metadataService.getMetadata(id)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.ok(Map.of("message", "No metadata found for document")));
     }
 
     @PutMapping("/documents/{id}/metadata")
@@ -50,7 +45,7 @@ public class MetadataController {
             @PathVariable Long id,
             @Valid @RequestBody MetadataRequest request,
             Authentication authentication) {
-        Long userId = getUserIdFromAuthentication(authentication);
+        Long userId = authenticatedUserService.requireUserId(authentication);
 
         DocumentMetadata updated = metadataService.updateMetadata(id, request, userId);
 
@@ -129,12 +124,4 @@ public class MetadataController {
         return ResponseEntity.ok(results);
     }
 
-    private Long getUserIdFromAuthentication(Authentication authentication) {
-        if (authentication == null) {
-            return 1L;
-        }
-        return userRepository.findByUsername(authentication.getName())
-                .map(User::getId)
-                .orElse(1L);
-    }
 }

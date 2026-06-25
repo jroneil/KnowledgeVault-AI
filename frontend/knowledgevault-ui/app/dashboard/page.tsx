@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FileText, Folder, Search, Users, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { isLoading: authLoading, logout, token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalDocuments: 0,
@@ -16,10 +18,11 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    // Check if user is authenticated
-    const token = localStorage.getItem('token');
+    if (authLoading) {
+      return;
+    }
     if (!token) {
-      router.push('/auth/login');
+      router.push('/login');
       return;
     }
 
@@ -33,7 +36,7 @@ export default function DashboardPage() {
       });
       setLoading(false);
     }, 1000);
-  }, [router]);
+  }, [authLoading, router, token]);
 
   if (loading) {
     return (
@@ -130,10 +133,7 @@ export default function DashboardPage() {
                 Search
               </Link>
               <button
-                onClick={() => {
-                  localStorage.removeItem('token');
-                  router.push('/auth/login');
-                }}
+                onClick={logout}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
               >
                 Logout

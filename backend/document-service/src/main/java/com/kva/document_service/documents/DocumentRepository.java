@@ -45,22 +45,22 @@ public class DocumentRepository {
     }
 
     public List<Document> findAll() {
-        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents ORDER BY created_at DESC";
+        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper);
     }
 
     public List<Document> findByCollectionId(Long collectionId) {
-        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents WHERE collection_id = ? ORDER BY created_at DESC";
+        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents WHERE collection_id = ? ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper, collectionId);
     }
 
     public List<Document> findByStatus(String status) {
-        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents WHERE status = ? ORDER BY created_at DESC";
+        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents WHERE status = ? ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper, status);
     }
 
     public List<Document> findByCreatedBy(Long userId) {
-        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents WHERE created_by = ? ORDER BY created_at DESC";
+        String sql = "SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at FROM documents WHERE created_by = ? ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper, userId);
     }
 
@@ -69,7 +69,7 @@ public class DocumentRepository {
             SELECT id, collection_id, title, description, status, current_version, created_by, created_at, updated_at
             FROM documents
             WHERE title ILIKE ? OR description ILIKE ?
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             """;
         String searchPattern = "%" + searchTerm + "%";
         return jdbcTemplate.query(sql, rowMapper, searchPattern, searchPattern);

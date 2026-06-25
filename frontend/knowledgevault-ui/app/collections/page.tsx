@@ -19,7 +19,7 @@ export default function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const { user, token } = useAuth()
+  const { apiFetch, token } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -27,29 +27,25 @@ export default function CollectionsPage() {
       router.push('/login')
       return
     }
-    fetchCollections()
-  }, [token, router])
-
-  const fetchCollections = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/v1/collections', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+    let cancelled = false
+    apiFetch('/api/v1/collections')
+      .then(async response => {
+        if (!response.ok) throw new Error('Failed to fetch collections')
+        return response.json()
       })
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch collections')
-      }
-      
-      const data = await response.json()
-      setCollections(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+      .then(data => {
+        if (!cancelled) setCollections(data.collections ?? data)
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'An error occurred')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }
+  }, [token, router, apiFetch])
 
   const handleCreateCollection = () => {
     router.push('/collections/new')

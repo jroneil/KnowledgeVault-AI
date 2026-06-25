@@ -14,7 +14,7 @@ from app.services.ocr_service import ocr_service
 security = HTTPBearer()
 
 # Router
-router = APIRouter(prefix="/api/v1/ocr", tags=["ocr"])
+router = APIRouter()
 
 
 # Request/Response Models

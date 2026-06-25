@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { getApiUrl } from "../../lib/api";
 
 export interface UserSession {
   userId: number;
@@ -25,32 +26,44 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+interface StoredSession {
+  token: string | null;
+  user: UserSession | null;
+}
+
+function readStoredSession(): StoredSession {
+  if (typeof window === "undefined") {
+    return { token: null, user: null };
+  }
+
+  const storedToken = localStorage.getItem("kv_token");
+  const storedUser = localStorage.getItem("kv_user");
+  if (!storedToken || !storedUser) {
+    return { token: null, user: null };
+  }
+
+  try {
+    return { token: storedToken, user: JSON.parse(storedUser) as UserSession };
+  } catch {
+    localStorage.removeItem("kv_token");
+    localStorage.removeItem("kv_user");
+    return { token: null, user: null };
+  }
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserSession | null>(null);
+  const [session, setSession] = useState<StoredSession>({ token: null, user: null });
   const [isLoading, setIsLoading] = useState(true);
+  const { token, user } = session;
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    // Load auth from localStorage on mount
-    const storedToken = localStorage.getItem("kv_token");
-    const storedUser = localStorage.getItem("kv_user");
-
-    if (storedToken && storedUser) {
-      try {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error("Failed to parse stored user", e);
-        // Clear corrupt data
-        localStorage.removeItem("kv_token");
-        localStorage.removeItem("kv_user");
-      }
-    }
-    setIsLoading(false);
+    const timeoutId = window.setTimeout(() => {
+      setSession(readStoredSession());
+      setIsLoading(false);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   // Handle route protection
@@ -67,21 +80,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token, pathname, isLoading, router]);
 
-  const login = (newToken: string, newUser: UserSession) => {
+  const login = useCallback((newToken: string, newUser: UserSession) => {
     localStorage.setItem("kv_token", newToken);
     localStorage.setItem("kv_user", JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
+    setSession({ token: newToken, user: newUser });
     router.push("/dashboard");
-  };
+  }, [router]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("kv_token");
     localStorage.removeItem("kv_user");
-    setToken(null);
-    setUser(null);
+    setSession({ token: null, user: null });
     router.push("/login");
-  };
+  }, [router]);
 
   const hasRole = (role: string): boolean => {
     return user?.roles.includes(role) || false;
@@ -90,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = (): boolean => hasRole("ADMIN");
   const isContributor = (): boolean => hasRole("CONTRIBUTOR") || hasRole("ADMIN");
 
-  const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const apiFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
     const headers = new Headers(options.headers || {});
     
     // Add bearer token if available
@@ -104,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers.set("Content-Type", "application/json");
     }
 
-    const targetUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+    const targetUrl = url.startsWith("http") ? url : `${getApiUrl()}${url}`;
     
     const response = await fetch(targetUrl, {
       ...options,
@@ -117,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return response;
-  };
+  }, [token, logout]);
 
   return (
     <AuthContext.Provider

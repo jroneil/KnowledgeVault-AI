@@ -1,7 +1,5 @@
 package com.kva.document_service.search;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kva.document_service.search.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,12 +20,11 @@ import java.util.List;
 public class AISearchClient {
 
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
 
-    @Value("${ai.service.base-url:http://ai-service:8000}")
+    @Value("${ai-service.base-url}")
     private String aiServiceBaseUrl;
 
-    @Value("${ai.service.internal-api-key:your-internal-api-key-change-in-production}")
+    @Value("${ai-service.internal-api-key}")
     private String internalApiKey;
 
     private HttpHeaders createHeaders() {

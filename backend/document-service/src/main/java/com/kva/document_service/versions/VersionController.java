@@ -1,6 +1,10 @@
 package com.kva.document_service.versions;
 
+import com.kva.document_service.auth.AuthenticatedUserService;
+import com.kva.document_service.common.exceptions.ResourceNotFoundException;
 import com.kva.document_service.documents.DocumentVersion;
+import com.kva.document_service.users.User;
+import com.kva.document_service.users.UserRepository;
 import com.kva.document_service.versions.dto.VersionResponse;
 import com.kva.document_service.versions.dto.VersionUploadResponse;
 import lombok.RequiredArgsConstructor;
@@ -10,8 +14,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,9 +28,11 @@ import java.util.stream.Collectors;
 public class VersionController {
 
     private final VersionService versionService;
+    private final AuthenticatedUserService authenticatedUserService;
+    private final UserRepository userRepository;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public ResponseEntity<List<VersionResponse>> getVersionHistory(
             @PathVariable Long documentId) {
         log.info("Getting version history for document: {}", documentId);
@@ -39,15 +44,13 @@ public class VersionController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR')")
     public ResponseEntity<VersionUploadResponse> uploadNewVersion(
             @PathVariable Long documentId,
             @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        log.info("Uploading new version for document: {} by user: {}", documentId, userDetails.getUsername());
-        
-        // Get user ID from authenticated user (this would need proper implementation)
-        Long userId = getUserIdFromUserDetails(userDetails);
+            Authentication authentication) {
+        Long userId = authenticatedUserService.requireUserId(authentication);
+        log.info("Uploading new version for document: {} by user: {}", documentId, userId);
         
         var version = versionService.uploadNewVersion(documentId, file, userId);
         
@@ -61,76 +64,79 @@ public class VersionController {
                 .message("New version uploaded successfully")
                 .build();
         
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(201).body(response);
     }
 
     @GetMapping("/current")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public ResponseEntity<VersionResponse> getCurrentVersion(
             @PathVariable Long documentId) {
         log.info("Getting current version for document: {}", documentId);
         
         var version = versionService.getCurrentVersion(documentId)
-                .orElseThrow(() -> new RuntimeException("No current version found for document: " + documentId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No current version found for document: " + documentId));
         
         return ResponseEntity.ok(mapToVersionResponse(version));
     }
 
     @GetMapping("/{versionNumber}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public ResponseEntity<VersionResponse> getVersionByNumber(
             @PathVariable Long documentId,
             @PathVariable Integer versionNumber) {
         log.info("Getting version {} for document: {}", versionNumber, documentId);
         
         var version = versionService.getVersionByNumber(documentId, versionNumber)
-                .orElseThrow(() -> new RuntimeException("Version " + versionNumber + " not found for document: " + documentId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Version " + versionNumber + " not found for document: " + documentId));
         
         return ResponseEntity.ok(mapToVersionResponse(version));
     }
 
     @GetMapping("/{versionNumber}/download")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public ResponseEntity<Resource> downloadVersion(
             @PathVariable Long documentId,
             @PathVariable Integer versionNumber) {
         log.info("Downloading version {} for document: {}", versionNumber, documentId);
         
-        var version = versionService.getVersionByNumber(documentId, versionNumber)
-                .orElseThrow(() -> new RuntimeException("Version " + versionNumber + " not found for document: " + documentId));
-        
-        // This would need FileStorageService to be injected and used
-        // For now, returning a placeholder response
+        var loaded = versionService.loadVersion(documentId, versionNumber);
+        var version = loaded.version();
+        MediaType contentType = version.getMimeType() == null
+                ? MediaType.APPLICATION_OCTET_STREAM
+                : MediaType.parseMediaType(version.getMimeType());
+
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + version.getFileName() + "\"")
-                .contentType(MediaType.parseMediaType(version.getMimeType()))
-                .build();
+                .contentType(contentType)
+                .contentLength(version.getFileSize())
+                .body(loaded.resource());
     }
 
     @PutMapping("/{versionNumber}/set-current")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR')")
     public ResponseEntity<Void> setCurrentVersion(
             @PathVariable Long documentId,
             @PathVariable Integer versionNumber,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        log.info("Setting version {} as current for document: {} by user: {}", versionNumber, documentId, userDetails.getUsername());
-        
-        Long userId = getUserIdFromUserDetails(userDetails);
+            Authentication authentication) {
+        Long userId = authenticatedUserService.requireUserId(authentication);
+        log.info("Setting version {} as current for document: {} by user: {}",
+                versionNumber, documentId, userId);
         versionService.setCurrentVersion(documentId, versionNumber, userId);
         
         return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{versionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CONTRIBUTOR')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR')")
     public ResponseEntity<Void> deleteVersion(
             @PathVariable Long documentId,
             @PathVariable Long versionId,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        log.info("Deleting version {} for document: {} by user: {}", versionId, documentId, userDetails.getUsername());
-        
-        Long userId = getUserIdFromUserDetails(userDetails);
-        versionService.deleteVersion(versionId, userId);
+            Authentication authentication) {
+        Long userId = authenticatedUserService.requireUserId(authentication);
+        log.info("Deleting version {} for document: {} by user: {}", versionId, documentId, userId);
+        versionService.deleteVersion(documentId, versionId, userId);
         
         return ResponseEntity.noContent().build();
     }
@@ -143,17 +149,18 @@ public class VersionController {
                 .fileName(version.getFileName())
                 .fileSize(version.getFileSize())
                 .mimeType(version.getMimeType())
-                .uploadedBy(version.getUploadedBy() != null ? version.getUploadedBy().toString() : "unknown")
+                .uploadedBy(resolveUsername(version.getUploadedBy()))
                 .uploadDate(version.getUploadDate())
                 .isCurrent(version.getIsCurrent())
                 .build();
     }
 
-    private Long getUserIdFromUserDetails(UserDetails userDetails) {
-        // This is a placeholder - in a real implementation, you would:
-        // 1. Have a UserService that can look up user by username
-        // 2. Return the actual user ID
-        // For now, return a default value
-        return 1L; // Default to admin user
+    private String resolveUsername(Long userId) {
+        if (userId == null) {
+            return "unknown";
+        }
+        return userRepository.findById(userId)
+                .map(User::getUsername)
+                .orElse("unknown");
     }
 }

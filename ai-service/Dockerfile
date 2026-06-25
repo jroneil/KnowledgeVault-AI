@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     tesseract-ocr \
     tesseract-ocr-eng \
-    tesseract-ocr-fre \
+    tesseract-ocr-fra \
     tesseract-ocr-deu \
     tesseract-ocr-spa \
     libtesseract-dev \
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
 
 # Set environment variables for OCR
 ENV TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata
-ENV OCR_LANGUAGES=eng,fre,deu,spa
+ENV OCR_LANGUAGES=eng,fra,deu,spa
 ENV OCR_DPI=300
 ENV OCR_TIMEOUT=120
 
@@ -42,7 +42,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
 
 # Run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -61,7 +61,7 @@ check_service() {
             fi
             ;;
         "backend")
-            if curl -s http://localhost:8080/actuator/health &>/dev/null; then
+            if curl -s http://localhost:8080/api/v1/health &>/dev/null; then
                 details="$details | ${GREEN}Backend Healthy${NC}"
             else
                 details="$details | ${YELLOW}Backend Unreachable${NC}"

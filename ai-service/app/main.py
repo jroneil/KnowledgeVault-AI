@@ -3,11 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api import api_router
-from app.api.health import router as health_router
-from app.api.ocr import router as ocr_router
-from app.api.search import router as search_router
 from app.services.ollama_client import OllamaClient
-from app.services.ocr_service import ocr_service
 
 
 @asynccontextmanager
@@ -47,7 +43,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -55,15 +51,6 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-
-# Include search router
-app.include_router(search_router, tags=["search"])
-
-# Include OCR router
-app.include_router(ocr_router, tags=["ocr"])
-
-# Include health router for root-level health endpoints
-app.include_router(health_router)
 
 
 # Root endpoint
@@ -83,8 +70,12 @@ async def root():
 # Health check at root level
 @app.get("/health")
 async def health():
-    """Simple health check endpoint"""
-    return {"status": "healthy"}
+    """Lightweight container health check that does not depend on Ollama."""
+    return {
+        "status": "healthy",
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+    }
 
 
 if __name__ == "__main__":
@@ -93,6 +84,6 @@ if __name__ == "__main__":
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.DEBUG,
+        reload=settings.APP_DEBUG,
         log_level="info"
     )

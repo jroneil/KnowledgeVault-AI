@@ -24,60 +24,19 @@ interface SearchResult {
   updatedAt: string
 }
 
-interface ChunkResult {
-  chunkId: number
-  documentId: number
-  versionId: number | null
-  chunkIndex: number
-  content: string
-  pageNumber: number | null
-  sectionName: string | null
-  tokenCount: number | null
-  similarityScore: number
-  createdAt: string
-}
-
-interface RAGContext {
-  chunkId: number
-  documentId: number
-  chunkIndex: number
-  content: string
-  similarityScore: number
-}
-
-interface RAGResponse {
-  query: string
-  answer: string
-  contexts: RAGContext[]
-  totalContexts: number
-  modelUsed: string
-  embeddingModel: string
-  processingTimeMs: number
+interface Collection {
+  id: number
+  name: string
+  isActive: boolean
 }
 
 export default function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([])
-  const [collections, setCollections] = useState<any[]>([])
+  const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const { token } = useAuth()
+  const { apiFetch, token } = useAuth()
   const router = useRouter()
-
-  // Search mode tabs
-  const [activeTab, setActiveTab] = useState<'traditional' | 'semantic' | 'rag'>('traditional')
-
-  // Semantic search state
-  const [semanticQuery, setSemanticQuery] = useState('')
-  const [semanticResults, setSemanticResults] = useState<ChunkResult[]>([])
-  const [semanticLoading, setSemanticLoading] = useState(false)
-  const [semanticLimit, setSemanticLimit] = useState(10)
-  const [semanticThreshold, setSemanticThreshold] = useState(0.7)
-
-  // RAG state
-  const [ragQuery, setRagQuery] = useState('')
-  const [ragResponse, setRagResponse] = useState<RAGResponse | null>(null)
-  const [ragLoading, setRagLoading] = useState(false)
-  const [ragTopK, setRagTopK] = useState(5)
 
   // Search filters
   const [title, setTitle] = useState('')
@@ -95,25 +54,23 @@ export default function SearchPage() {
       router.push('/login')
       return
     }
-    fetchCollections()
-  }, [token, router])
-
-  const fetchCollections = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/v1/collections', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+    let cancelled = false
+    apiFetch('/api/v1/collections')
+      .then(async response => {
+        if (!response.ok) throw new Error('Failed to fetch collections')
+        return response.json()
       })
-
-      if (response.ok) {
-        const data = await response.json()
-        setCollections(data.filter((c: any) => c.isActive))
-      }
-    } catch (err) {
-      console.error('Failed to fetch collections:', err)
+      .then((data: Collection[] | { collections: Collection[] }) => {
+        const collections = Array.isArray(data) ? data : data.collections
+        if (!cancelled) setCollections(collections.filter(item => item.isActive))
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to fetch collections')
+      })
+    return () => {
+      cancelled = true
     }
-  }
+  }, [token, router, apiFetch])
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -135,11 +92,7 @@ export default function SearchPage() {
       }
       if (status) params.append('status', status)
 
-      const response = await fetch(`http://localhost:8080/api/v1/search?${params.toString()}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await apiFetch(`/api/v1/search?${params.toString()}`)
 
       if (!response.ok) {
         throw new Error('Search failed')
@@ -182,72 +135,6 @@ export default function SearchPage() {
 
   const hasActiveFilters = () => {
     return title || collection || product || revision || department || manufacturer || category || tags || status
-  }
-
-  // Semantic search handler
-  const handleSemanticSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSemanticLoading(true)
-    setError('')
-
-    try {
-      const response = await fetch('http://localhost:8080/api/v1/semantic-search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          query: semanticQuery,
-          limit: semanticLimit,
-          threshold: semanticThreshold
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Semantic search failed')
-      }
-
-      const data = await response.json()
-      setSemanticResults(data.results || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Semantic search failed')
-    } finally {
-      setSemanticLoading(false)
-    }
-  }
-
-  // RAG query handler
-  const handleRAGQuery = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setRagLoading(true)
-    setError('')
-    setRagResponse(null)
-
-    try {
-      const response = await fetch('http://localhost:8080/api/v1/semantic-search/rag', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          query: ragQuery,
-          topK: ragTopK
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('RAG query failed')
-      }
-
-      const data = await response.json()
-      setRagResponse(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'RAG query failed')
-    } finally {
-      setRagLoading(false)
-    }
   }
 
   return (

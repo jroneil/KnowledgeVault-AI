@@ -2,6 +2,7 @@ package com.kva.document_service.metadata;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.support.SqlArrayValue;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
@@ -33,7 +34,7 @@ public class DocumentMetadataRepository {
             metadata.getRevision(),
             metadata.getDepartment(),
             metadata.getManufacturer(),
-            metadata.getTags(),
+            toSqlArray(metadata.getTags()),
             metadata.getCategory(),
             metadata.getEffectiveDate()
         );
@@ -105,7 +106,7 @@ public class DocumentMetadataRepository {
             metadata.getRevision(),
             metadata.getDepartment(),
             metadata.getManufacturer(),
-            metadata.getTags(),
+            toSqlArray(metadata.getTags()),
             metadata.getCategory(),
             metadata.getEffectiveDate(),
             metadata.getId()
@@ -166,12 +167,16 @@ public class DocumentMetadataRepository {
         }
         if (tags != null && !tags.isEmpty()) {
             sql.append(" AND tags && ?::text[]");
-            params.add(tags);
+            params.add(toSqlArray(tags));
         }
         
         sql.append(" ORDER BY created_at DESC");
         
         return jdbcTemplate.query(sql.toString(), rowMapper, params.toArray());
+    }
+
+    private SqlArrayValue toSqlArray(List<String> tags) {
+        return tags == null ? null : new SqlArrayValue("text", tags.toArray());
     }
 
     private static class DocumentMetadataRowMapper implements RowMapper<DocumentMetadata> {

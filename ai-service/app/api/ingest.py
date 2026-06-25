@@ -207,6 +207,11 @@ async def process_document(job_id: str, request: StartIngestionRequest):
         for i, (saved_chunk, chunk_schema) in enumerate(zip(saved_chunks, chunks)):
             try:
                 embedding_vector = await ollama_client.generate_embedding(chunk_schema.content)
+                if len(embedding_vector) != settings.EMBEDDING_DIMENSION:
+                    raise ValueError(
+                        f"Embedding model returned {len(embedding_vector)} dimensions; "
+                        f"expected {settings.EMBEDDING_DIMENSION}"
+                    )
                 
                 embedding_data = {
                     'chunk_id': saved_chunk.id,

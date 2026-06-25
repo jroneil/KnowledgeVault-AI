@@ -52,17 +52,17 @@ public class CollectionRepository {
     }
 
     public List<Collection> findAll() {
-        String sql = "SELECT id, name, description, is_active, created_by, created_at, updated_at FROM collections ORDER BY created_at DESC";
+        String sql = "SELECT id, name, description, is_active, created_by, created_at, updated_at FROM collections ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper);
     }
 
     public List<Collection> findActive() {
-        String sql = "SELECT id, name, description, is_active, created_by, created_at, updated_at FROM collections WHERE is_active = true ORDER BY created_at DESC";
+        String sql = "SELECT id, name, description, is_active, created_by, created_at, updated_at FROM collections WHERE is_active = true ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper);
     }
 
     public List<Collection> findByCreatedBy(Long userId) {
-        String sql = "SELECT id, name, description, is_active, created_by, created_at, updated_at FROM collections WHERE created_by = ? ORDER BY created_at DESC";
+        String sql = "SELECT id, name, description, is_active, created_by, created_at, updated_at FROM collections WHERE created_by = ? ORDER BY created_at DESC, id DESC";
         return jdbcTemplate.query(sql, rowMapper, userId);
     }
 

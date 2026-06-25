@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../context/AuthContext'
@@ -18,10 +18,9 @@ interface Document {
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([])
-  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const { token } = useAuth()
+  const { apiFetch, token } = useAuth()
   const router = useRouter()
 
   // Filter states
@@ -34,38 +33,29 @@ export default function DocumentsPage() {
       router.push('/login')
       return
     }
-    fetchDocuments()
-  }, [token, router])
-
-  useEffect(() => {
-    filterDocuments()
-  }, [documents, searchTerm, statusFilter, collectionFilter])
-
-  const fetchDocuments = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/api/v1/documents', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+    let cancelled = false
+    apiFetch('/api/v1/documents')
+      .then(async response => {
+        if (!response.ok) throw new Error('Failed to fetch documents')
+        return response.json()
       })
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch documents')
-      }
-      
-      const data = await response.json()
-      setDocuments(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setLoading(false)
+      .then(data => {
+        if (!cancelled) setDocuments(data.documents ?? data)
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'An error occurred')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }
+  }, [token, router, apiFetch])
 
-  const filterDocuments = () => {
+  const filteredDocuments = useMemo(() => {
     let filtered = documents
 
-    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(doc =>
         doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -73,18 +63,16 @@ export default function DocumentsPage() {
       )
     }
 
-    // Filter by status
     if (statusFilter !== 'ALL') {
       filtered = filtered.filter(doc => doc.status === statusFilter)
     }
 
-    // Filter by collection (simplified - in real app would have collection names)
     if (collectionFilter !== 'ALL') {
       filtered = filtered.filter(doc => doc.collectionId === parseInt(collectionFilter))
     }
 
-    setFilteredDocuments(filtered)
-  }
+    return filtered
+  }, [documents, searchTerm, statusFilter, collectionFilter])
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -101,11 +89,7 @@ export default function DocumentsPage() {
 
   const handleDownload = async (documentId: number) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/documents/${documentId}/download`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      const response = await apiFetch(`/api/v1/documents/${documentId}/download`)
 
       if (!response.ok) {
         throw new Error('Failed to download document')
