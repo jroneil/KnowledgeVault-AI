@@ -28,11 +28,37 @@ export interface DocumentMetadata {
   revision: string
   department: string
   manufacturer: string
+  model?: string
+  documentType?: string
+  documentNumber?: string
+  language?: string
   tags: string[]
   category: string
   effectiveDate: string
+  publicationDate?: string
+  pageCount?: number
   createdAt: string
   updatedAt: string
+}
+
+export interface DocumentMetadataExtractionResult {
+  id?: number
+  documentId?: number
+  extractedTitle?: string
+  extractedManufacturer?: string
+  extractedModel?: string
+  extractedDocumentType?: string
+  extractedDocumentNumber?: string
+  extractedRevision?: string
+  extractedLanguage?: string
+  extractedPublicationDate?: string
+  extractedPageCount?: number
+  extractedTags?: string[]
+  confidenceByField?: Record<string, number>
+  sourceSummary?: string
+  needsReview: boolean
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface VersionSummary {
@@ -205,6 +231,27 @@ export interface VersionUploadResponse {
   message: string
 }
 
+export interface BulkUploadItemResponse {
+  fileName: string
+  success: boolean
+  documentId?: number
+  versionId?: number
+  title?: string
+  message?: string
+  error?: string
+  needsReview: boolean
+  metadata?: DocumentMetadata
+  extractionResult?: DocumentMetadataExtractionResult
+}
+
+export interface BulkUploadResponse {
+  processedCount: number
+  succeededCount: number
+  failedCount: number
+  needsReviewCount: number
+  results: BulkUploadItemResponse[]
+}
+
 export function getApiUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || ''
 }
@@ -278,6 +325,11 @@ export async function listVersions(apiFetch: ApiFetch, documentId: string | numb
 export async function uploadDocument(apiFetch: ApiFetch, formData: FormData): Promise<DocumentUploadResponse> {
   const response = await apiFetch('/api/v1/documents/upload', { method: 'POST', body: formData })
   return parseJsonOrThrow<DocumentUploadResponse>(response, 'Upload failed')
+}
+
+export async function bulkUploadDocuments(apiFetch: ApiFetch, formData: FormData): Promise<BulkUploadResponse> {
+  const response = await apiFetch('/api/v1/documents/bulk-upload', { method: 'POST', body: formData })
+  return parseJsonOrThrow<BulkUploadResponse>(response, 'Bulk upload failed')
 }
 
 export async function uploadVersion(

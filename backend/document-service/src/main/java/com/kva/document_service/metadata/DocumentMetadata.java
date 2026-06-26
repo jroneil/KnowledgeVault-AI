@@ -20,9 +20,15 @@ public class DocumentMetadata {
     private String revision;
     private String department;
     private String manufacturer;
+    private String model;
+    private String documentType;
+    private String documentNumber;
+    private String language;
     private List<String> tags;
     private String category;
     private LocalDate effectiveDate;
+    private LocalDate publicationDate;
+    private Integer pageCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

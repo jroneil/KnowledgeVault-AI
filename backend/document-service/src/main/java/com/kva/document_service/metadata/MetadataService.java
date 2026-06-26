@@ -48,6 +48,18 @@ public class MetadataService {
         if (request.getManufacturer() != null) {
             metadata.setManufacturer(request.getManufacturer());
         }
+        if (request.getModel() != null) {
+            metadata.setModel(request.getModel());
+        }
+        if (request.getDocumentType() != null) {
+            metadata.setDocumentType(request.getDocumentType());
+        }
+        if (request.getDocumentNumber() != null) {
+            metadata.setDocumentNumber(request.getDocumentNumber());
+        }
+        if (request.getLanguage() != null) {
+            metadata.setLanguage(request.getLanguage());
+        }
         if (request.getCategory() != null) {
             metadata.setCategory(request.getCategory());
         }
@@ -57,6 +69,16 @@ public class MetadataService {
             } catch (Exception e) {
                 log.warn("Invalid effective date format: {}", request.getEffectiveDate());
             }
+        }
+        if (request.getPublicationDate() != null) {
+            try {
+                metadata.setPublicationDate(LocalDate.parse(request.getPublicationDate()));
+            } catch (Exception e) {
+                log.warn("Invalid publication date format: {}", request.getPublicationDate());
+            }
+        }
+        if (request.getPageCount() != null) {
+            metadata.setPageCount(request.getPageCount());
         }
         if (request.getTags() != null) {
             List<String> tagsList = Arrays.asList(request.getTags().split(","))

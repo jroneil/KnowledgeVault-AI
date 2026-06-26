@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../context/AuthContext'
 import {
+  BulkUploadResponse,
   Collection,
   IngestionJob,
+  bulkUploadDocuments,
   listCollections,
   listDocumentIngestionJobs,
   uploadDocument,
@@ -26,13 +28,14 @@ export default function DocumentUploadPage() {
     tags: '',
     effectiveDate: ''
   })
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [uploadedDocumentId, setUploadedDocumentId] = useState<number | null>(null)
   const [ingestionJobs, setIngestionJobs] = useState<IngestionJob[]>([])
+  const [bulkSummary, setBulkSummary] = useState<BulkUploadResponse | null>(null)
   const { apiFetch, token } = useAuth()
   const router = useRouter()
 
@@ -63,16 +66,14 @@ export default function DocumentUploadPage() {
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-    }
+    setFiles(e.target.files ? Array.from(e.target.files) : [])
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    if (!file) {
-      setError('Please select a file to upload')
+
+    if (files.length === 0) {
+      setError('Please select at least one file to upload')
       return
     }
 
@@ -81,31 +82,49 @@ export default function DocumentUploadPage() {
       return
     }
 
+    if (files.length === 1 && !formData.title.trim()) {
+      setError('Please enter a title for single-document upload')
+      return
+    }
+
     setUploading(true)
     setError('')
     setSuccess(false)
     setUploadedDocumentId(null)
     setIngestionJobs([])
+    setBulkSummary(null)
 
     try {
-      const formDataToSend = new FormData()
-      formDataToSend.append('file', file)
-      formDataToSend.append(
-        'metadata',
-        new Blob(
-          [JSON.stringify({
-            ...formData,
-            collectionId: Number(formData.collectionId)
-          })],
-          { type: 'application/json' }
-        )
+      const metadataBlob = new Blob(
+        [JSON.stringify({
+          ...formData,
+          collectionId: Number(formData.collectionId)
+        })],
+        { type: 'application/json' }
       )
 
-      const uploadResponse = await uploadDocument(apiFetch, formDataToSend)
-      setSuccess(true)
-      setUploadedDocumentId(uploadResponse.documentId)
-      setIngestionJobs(await listDocumentIngestionJobs(apiFetch, uploadResponse.documentId).catch(() => []))
-      // Reset form after successful upload
+      if (files.length === 1) {
+        const formDataToSend = new FormData()
+        formDataToSend.append('file', files[0])
+        formDataToSend.append('metadata', metadataBlob)
+
+        const uploadResponse = await uploadDocument(apiFetch, formDataToSend)
+        setSuccess(true)
+        setUploadedDocumentId(uploadResponse.documentId)
+        setIngestionJobs(await listDocumentIngestionJobs(apiFetch, uploadResponse.documentId).catch(() => []))
+        setTimeout(() => {
+          router.push('/documents')
+        }, 2000)
+      } else {
+        const formDataToSend = new FormData()
+        files.forEach(file => formDataToSend.append('files', file))
+        formDataToSend.append('metadata', metadataBlob)
+
+        const response = await bulkUploadDocuments(apiFetch, formDataToSend)
+        setSuccess(response.succeededCount > 0)
+        setBulkSummary(response)
+      }
+
       setFormData({
         collectionId: '',
         title: '',
@@ -118,13 +137,7 @@ export default function DocumentUploadPage() {
         tags: '',
         effectiveDate: ''
       })
-      setFile(null)
-      
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        router.push('/documents')
-      }, 2000)
-
+      setFiles([])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
@@ -144,12 +157,12 @@ export default function DocumentUploadPage() {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-6">
         <Link href="/documents" className="text-blue-600 hover:text-blue-800">
-          ← Back to Documents
+          Back to Documents
         </Link>
       </div>
 
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Document</h1>
-      <p className="text-gray-600 mb-8">Upload a new document to your collection</p>
+      <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Documents</h1>
+      <p className="text-gray-600 mb-8">Upload one or more documents to your collection</p>
 
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -159,7 +172,9 @@ export default function DocumentUploadPage() {
 
       {success && (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-          Document uploaded successfully! Redirecting to documents list...
+          {bulkSummary
+            ? `Bulk upload completed. ${bulkSummary.succeededCount} succeeded, ${bulkSummary.failedCount} failed, ${bulkSummary.needsReviewCount} need review.`
+            : 'Document uploaded successfully! Redirecting to documents list...'}
         </div>
       )}
 
@@ -180,9 +195,30 @@ export default function DocumentUploadPage() {
         </div>
       )}
 
+      {bulkSummary && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-900 px-4 py-3 rounded mb-4">
+          <div className="font-medium">Bulk upload summary</div>
+          <div className="text-sm mt-1">
+            Processed {bulkSummary.processedCount} files. {bulkSummary.succeededCount} succeeded, {bulkSummary.failedCount} failed, {bulkSummary.needsReviewCount} need review.
+          </div>
+          <div className="mt-3 space-y-2 text-sm">
+            {bulkSummary.results.map(result => (
+              <div key={`${result.fileName}-${result.documentId ?? result.error ?? 'result'}`}>
+                <span className={result.success ? 'text-green-700' : 'text-red-700'}>
+                  {result.success ? 'Success' : 'Failed'}
+                </span>{' '}
+                - {result.fileName}
+                {result.title ? ` (${result.title})` : ''}
+                {result.needsReview ? ' - needs review' : ''}
+                {result.error ? ` - ${result.error}` : ''}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Collection Selection */}
           <div className="md:col-span-2">
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Collection *
@@ -203,10 +239,9 @@ export default function DocumentUploadPage() {
             </select>
           </div>
 
-          {/* File Upload */}
           <div className="md:col-span-2">
             <label className="block text-gray-700 text-sm font-bold mb-2">
-              File *
+              Files *
             </label>
             <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:border-blue-500 transition-colors">
               <div className="space-y-1 text-center">
@@ -225,11 +260,12 @@ export default function DocumentUploadPage() {
                 </svg>
                 <div className="flex text-sm text-gray-600">
                   <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none">
-                    <span>Upload a file</span>
+                    <span>Upload files</span>
                     <input
                       type="file"
                       className="sr-only"
                       onChange={handleFileChange}
+                      multiple
                       accept=".pdf,.doc,.docx,.txt,.html,.csv,.md"
                     />
                   </label>
@@ -238,32 +274,36 @@ export default function DocumentUploadPage() {
                 <p className="text-xs text-gray-500">
                   PDF, DOC, DOCX, TXT, HTML, CSV, Markdown up to 50MB
                 </p>
-                {file && (
-                  <p className="text-sm text-green-600 font-medium mt-2">
-                    Selected: {file.name}
-                  </p>
+                {files.length > 0 && (
+                  <div className="text-sm text-green-600 font-medium mt-2">
+                    <p>Selected {files.length} file{files.length === 1 ? '' : 's'}:</p>
+                    <ul className="mt-1 space-y-1">
+                      {files.slice(0, 5).map(file => (
+                        <li key={file.name}>{file.name}</li>
+                      ))}
+                      {files.length > 5 && <li>...and {files.length - 5} more</li>}
+                    </ul>
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Document Title */}
           <div className="md:col-span-2">
             <label className="block text-gray-700 text-sm font-bold mb-2">
-              Title *
+              Title {files.length <= 1 ? '*' : '(optional shared override)'}
             </label>
             <input
               type="text"
               name="title"
               value={formData.title}
               onChange={handleInputChange}
-              required
-              placeholder="Enter document title"
+              required={files.length <= 1}
+              placeholder={files.length <= 1 ? 'Enter document title' : 'Optional shared title for all selected files'}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          {/* Description */}
           <div className="md:col-span-2">
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Description
@@ -278,7 +318,6 @@ export default function DocumentUploadPage() {
             />
           </div>
 
-          {/* Product */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Product
@@ -293,7 +332,6 @@ export default function DocumentUploadPage() {
             />
           </div>
 
-          {/* Revision */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Revision
@@ -308,7 +346,6 @@ export default function DocumentUploadPage() {
             />
           </div>
 
-          {/* Department */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Department
@@ -323,7 +360,6 @@ export default function DocumentUploadPage() {
             />
           </div>
 
-          {/* Manufacturer */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Manufacturer
@@ -338,7 +374,6 @@ export default function DocumentUploadPage() {
             />
           </div>
 
-          {/* Category */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Category
@@ -353,7 +388,6 @@ export default function DocumentUploadPage() {
             />
           </div>
 
-          {/* Effective Date */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Effective Date
@@ -367,7 +401,6 @@ export default function DocumentUploadPage() {
             />
           </div>
 
-          {/* Tags */}
           <div className="md:col-span-2">
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Tags
@@ -386,7 +419,6 @@ export default function DocumentUploadPage() {
           </div>
         </div>
 
-        {/* Submit Button */}
         <div className="mt-8 flex justify-end space-x-4">
           <Link
             href="/documents"
@@ -399,7 +431,7 @@ export default function DocumentUploadPage() {
             disabled={uploading}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {uploading ? 'Uploading...' : 'Upload Document'}
+            {uploading ? 'Uploading...' : files.length > 1 ? 'Upload Documents' : 'Upload Document'}
           </button>
         </div>
       </form>
