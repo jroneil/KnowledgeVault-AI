@@ -45,6 +45,13 @@ ingestion:
     dimension: ${INGESTION_EMBEDDING_DIMENSION:768}
     batch-size: ${INGESTION_EMBEDDING_BATCH_SIZE:16}
     timeout-ms: ${INGESTION_EMBEDDING_TIMEOUT_MS:30000}
+
+semantic-retrieval:
+  top-k: ${SEMANTIC_RETRIEVAL_TOP_K:5}
+
+rag:
+  prompt:
+    max-context-tokens: ${RAG_PROMPT_MAX_CONTEXT_TOKENS:2000}
   chunking:
     enabled: ${INGESTION_CHUNKING_ENABLED:true}
     chunk-size: ${INGESTION_CHUNKING_SIZE:1000}

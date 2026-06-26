@@ -19,5 +19,7 @@ public class SemanticSearchResponse {
     private int totalResults;
     private List<ChunkResult> results;
     private int queryEmbeddingDimension;
+    private String embeddingModel;
+    private String embeddingModelVersion;
     private double searchTimeMs;
 }

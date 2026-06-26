@@ -3,18 +3,31 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FileText, Folder, Search, Users, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { FileText, Folder, Search, Users, TrendingUp, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import {
+  getCollectionOverviewStats,
+  getDocumentOverviewStats,
+  getHealth,
+  getSearchStats,
+  listUsers,
+} from '../../lib/api';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { isLoading: authLoading, logout, token } = useAuth();
+  const { isLoading: authLoading, logout, token, apiFetch, isAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [stats, setStats] = useState({
     totalDocuments: 0,
     totalCollections: 0,
-    recentUploads: 0,
-    totalUsers: 0
+    totalEmbeddings: 0,
+    totalUsers: null as number | null
+  });
+  const [serviceStatus, setServiceStatus] = useState({
+    backend: 'Checking',
+    search: 'Checking',
+    auth: 'Authenticated'
   });
 
   useEffect(() => {
@@ -26,17 +39,48 @@ export default function DashboardPage() {
       return;
     }
 
-    // Simulate loading dashboard data
-    setTimeout(() => {
-      setStats({
-        totalDocuments: 156,
-        totalCollections: 12,
-        recentUploads: 23,
-        totalUsers: 8
+    let cancelled = false;
+
+    Promise.allSettled([
+      getDocumentOverviewStats(apiFetch),
+      getCollectionOverviewStats(apiFetch),
+      getSearchStats(apiFetch),
+      getHealth(),
+      isAdmin() ? listUsers(apiFetch) : Promise.resolve(null),
+    ])
+      .then(([documentStats, collectionStats, searchStats, health, users]) => {
+        if (cancelled) return;
+
+        setStats({
+          totalDocuments: documentStats.status === 'fulfilled' ? documentStats.value.totalDocuments : 0,
+          totalCollections: collectionStats.status === 'fulfilled' ? collectionStats.value.totalCollections : 0,
+          totalEmbeddings: searchStats.status === 'fulfilled' ? searchStats.value.totalEmbeddings : 0,
+          totalUsers: users.status === 'fulfilled' && users.value ? users.value.length : null,
+        });
+
+        setServiceStatus({
+          backend: health.status === 'fulfilled' && health.value.status === 'UP' ? 'Operational' : 'Unavailable',
+          search: searchStats.status === 'fulfilled' ? 'Indexed' : 'Unavailable',
+          auth: token ? 'Authenticated' : 'Missing session',
+        });
+
+        const failures = [documentStats, collectionStats, searchStats]
+          .filter(result => result.status === 'rejected')
+          .length;
+        if (failures > 0) {
+          setError('Some dashboard data could not be loaded.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
-      setLoading(false);
-    }, 1000);
-  }, [authLoading, router, token]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, router, token, apiFetch, isAdmin]);
 
   if (loading) {
     return (
@@ -62,10 +106,10 @@ export default function DashboardPage() {
       color: 'bg-green-600'
     },
     {
-      title: 'Search Documents',
-      description: 'Find documents by title, content, or metadata',
+      title: 'Ask Documents',
+      description: 'Get a grounded single-shot answer with citations',
       icon: Search,
-      href: '/search',
+      href: '/ask',
       color: 'bg-purple-600'
     }
   ];
@@ -76,28 +120,28 @@ export default function DashboardPage() {
       value: stats.totalDocuments,
       icon: FileText,
       color: 'bg-blue-600',
-      trend: '+12%'
+      trend: 'Live'
     },
     {
       title: 'Collections',
       value: stats.totalCollections,
       icon: Folder,
       color: 'bg-green-600',
-      trend: '+3%'
+      trend: 'Live'
     },
     {
-      title: 'Recent Uploads',
-      value: stats.recentUploads,
-      icon: Clock,
+      title: 'Indexed Embeddings',
+      value: stats.totalEmbeddings,
+      icon: Search,
       color: 'bg-purple-600',
-      trend: '+5%'
+      trend: 'Live'
     },
     {
-      title: 'Active Users',
-      value: stats.totalUsers,
+      title: 'Users',
+      value: stats.totalUsers ?? '—',
       icon: Users,
       color: 'bg-orange-600',
-      trend: '+8%'
+      trend: isAdmin() ? 'Live' : 'Admin only'
     }
   ];
 
@@ -132,6 +176,12 @@ export default function DashboardPage() {
               >
                 Search
               </Link>
+              <Link
+                href="/ask"
+                className="text-zinc-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Ask
+              </Link>
               <button
                 onClick={logout}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
@@ -150,6 +200,12 @@ export default function DashboardPage() {
           <h2 className="text-3xl font-bold text-white mb-2">Welcome to KnowledgeVault AI</h2>
           <p className="text-zinc-400">Manage your documents and collaborate with your team</p>
         </div>
+
+        {error && (
+          <div className="mb-6 rounded-xl border border-yellow-700 bg-yellow-950/40 px-4 py-3 text-sm text-yellow-200">
+            {error}
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -205,21 +261,27 @@ export default function DashboardPage() {
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="text-white">Backend Service</span>
               </div>
-              <span className="text-green-400 text-sm">Operational</span>
+              <span className={`text-sm ${serviceStatus.backend === 'Operational' ? 'text-green-400' : 'text-red-400'}`}>
+                {serviceStatus.backend}
+              </span>
             </div>
             <div className="flex items-center justify-between p-3 bg-zinc-950/50 rounded-lg">
               <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-white">Database Connection</span>
+                <div className={`w-2 h-2 rounded-full ${serviceStatus.search === 'Indexed' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <span className="text-white">Semantic Search Index</span>
               </div>
-              <span className="text-green-400 text-sm">Connected</span>
+              <span className={`text-sm ${serviceStatus.search === 'Indexed' ? 'text-green-400' : 'text-red-400'}`}>
+                {serviceStatus.search}
+              </span>
             </div>
             <div className="flex items-center justify-between p-3 bg-zinc-950/50 rounded-lg">
               <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-white">Storage Service</span>
+                <div className={`w-2 h-2 rounded-full ${serviceStatus.auth === 'Authenticated' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <span className="text-white">Authenticated Session</span>
               </div>
-              <span className="text-green-400 text-sm">Available</span>
+              <span className={`text-sm ${serviceStatus.auth === 'Authenticated' ? 'text-green-400' : 'text-red-400'}`}>
+                {serviceStatus.auth}
+              </span>
             </div>
           </div>
         </div>

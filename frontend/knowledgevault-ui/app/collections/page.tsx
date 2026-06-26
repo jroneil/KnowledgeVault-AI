@@ -122,7 +122,7 @@ export default function CollectionsPage() {
               </div>
               
               <Link
-                href={`/collections/${collection.id}`}
+                href={`/documents?collectionId=${collection.id}`}
                 className="block text-center bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors"
               >
                 View Documents

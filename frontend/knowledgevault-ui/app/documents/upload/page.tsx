@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../context/AuthContext'
-
-interface Collection {
-  id: number
-  name: string
-  description: string
-  isActive: boolean
-}
+import {
+  Collection,
+  IngestionJob,
+  listCollections,
+  listDocumentIngestionJobs,
+  uploadDocument,
+} from '../../../lib/api'
 
 export default function DocumentUploadPage() {
   const [collections, setCollections] = useState<Collection[]>([])
@@ -31,6 +31,8 @@ export default function DocumentUploadPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<number | null>(null)
+  const [ingestionJobs, setIngestionJobs] = useState<IngestionJob[]>([])
   const { apiFetch, token } = useAuth()
   const router = useRouter()
 
@@ -40,14 +42,9 @@ export default function DocumentUploadPage() {
       return
     }
     let cancelled = false
-    apiFetch('/api/v1/collections')
-      .then(async response => {
-        if (!response.ok) throw new Error('Failed to fetch collections')
-        return response.json()
-      })
-      .then((data: Collection[] | { collections: Collection[] }) => {
-        const collections = Array.isArray(data) ? data : data.collections
-        if (!cancelled) setCollections(collections.filter(collection => collection.isActive))
+    listCollections(apiFetch)
+      .then(data => {
+        if (!cancelled) setCollections(data.filter(collection => collection.isActive))
       })
       .catch(err => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'An error occurred')
@@ -87,6 +84,8 @@ export default function DocumentUploadPage() {
     setUploading(true)
     setError('')
     setSuccess(false)
+    setUploadedDocumentId(null)
+    setIngestionJobs([])
 
     try {
       const formDataToSend = new FormData()
@@ -102,17 +101,10 @@ export default function DocumentUploadPage() {
         )
       )
 
-      const response = await apiFetch('/api/v1/documents/upload', {
-        method: 'POST',
-        body: formDataToSend
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Upload failed')
-      }
-
+      const uploadResponse = await uploadDocument(apiFetch, formDataToSend)
       setSuccess(true)
+      setUploadedDocumentId(uploadResponse.documentId)
+      setIngestionJobs(await listDocumentIngestionJobs(apiFetch, uploadResponse.documentId).catch(() => []))
       // Reset form after successful upload
       setFormData({
         collectionId: '',
@@ -168,6 +160,23 @@ export default function DocumentUploadPage() {
       {success && (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
           Document uploaded successfully! Redirecting to documents list...
+        </div>
+      )}
+
+      {success && uploadedDocumentId && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-900 px-4 py-3 rounded mb-4">
+          <div className="font-medium">Ingestion status</div>
+          {ingestionJobs.length === 0 ? (
+            <div className="text-sm mt-1">No ingestion job information is available yet.</div>
+          ) : (
+            <div className="mt-2 space-y-2 text-sm">
+              {ingestionJobs.map(job => (
+                <div key={job.id}>
+                  Job #{job.id}: {job.status} ({job.progressPercent ?? 0}%)
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -18,6 +18,7 @@ public class RAGResponse {
     private String query;
     private String answer;
     private List<RAGContext> contexts;
+    private List<RAGCitation> citations;
     private int totalContexts;
     private String modelUsed;
     private String embeddingModel;
