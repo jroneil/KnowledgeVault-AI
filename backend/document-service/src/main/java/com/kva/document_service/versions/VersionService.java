@@ -6,6 +6,7 @@ import com.kva.document_service.documents.Document;
 import com.kva.document_service.documents.DocumentRepository;
 import com.kva.document_service.documents.DocumentVersion;
 import com.kva.document_service.documents.DocumentVersionRepository;
+import com.kva.document_service.ingestion.IngestionJobService;
 import com.kva.document_service.storage.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class VersionService {
     private final DocumentVersionRepository versionRepository;
     private final DocumentRepository documentRepository;
     private final FileStorageService fileStorageService;
+    private final IngestionJobService ingestionJobService;
 
     @Transactional
     public DocumentVersion uploadNewVersion(Long documentId, MultipartFile file, Long userId) {
@@ -75,6 +77,7 @@ public class VersionService {
             // Update document current version
             document.setCurrentVersion(newVersionNumber);
             documentRepository.update(document);
+            ingestionJobService.createPendingJobIfAbsent(documentId, saved.getId());
 
             log.info("Created new version: {} for document: {} by user: {}", newVersionNumber, documentId, userId);
             return saved;

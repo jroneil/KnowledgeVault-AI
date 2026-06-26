@@ -7,6 +7,7 @@ import com.kva.document_service.common.exceptions.ResourceNotFoundException;
 import com.kva.document_service.documents.dto.DocumentUploadResponse;
 import com.kva.document_service.documents.dto.UpdateDocumentRequest;
 import com.kva.document_service.documents.dto.UploadDocumentRequest;
+import com.kva.document_service.ingestion.IngestionJobService;
 import com.kva.document_service.metadata.DocumentMetadata;
 import com.kva.document_service.metadata.DocumentMetadataRepository;
 import com.kva.document_service.storage.FileStorageService;
@@ -32,6 +33,7 @@ public class DocumentService {
     private final DocumentMetadataRepository metadataRepository;
     private final CollectionRepository collectionRepository;
     private final FileStorageService fileStorageService;
+    private final IngestionJobService ingestionJobService;
 
     @Transactional
     public DocumentUploadResponse uploadDocument(UploadDocumentRequest request,
@@ -94,6 +96,8 @@ public class DocumentService {
                 metadataRepository.save(metadata);
                 log.info("Created metadata for document: {}", savedDocument.getId());
             }
+
+            ingestionJobService.createPendingJobIfAbsent(savedDocument.getId(), savedVersion.getId());
 
             return DocumentUploadResponse.builder()
                     .documentId(savedDocument.getId())

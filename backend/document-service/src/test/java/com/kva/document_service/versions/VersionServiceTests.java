@@ -4,6 +4,7 @@ import com.kva.document_service.documents.Document;
 import com.kva.document_service.documents.DocumentRepository;
 import com.kva.document_service.documents.DocumentVersion;
 import com.kva.document_service.documents.DocumentVersionRepository;
+import com.kva.document_service.ingestion.IngestionJobService;
 import com.kva.document_service.storage.FileStorageService;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -17,6 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,10 +29,12 @@ class VersionServiceTests {
         DocumentVersionRepository versionRepository = mock(DocumentVersionRepository.class);
         DocumentRepository documentRepository = mock(DocumentRepository.class);
         FileStorageService fileStorageService = mock(FileStorageService.class);
+        IngestionJobService ingestionJobService = mock(IngestionJobService.class);
         VersionService service = new VersionService(
                 versionRepository,
                 documentRepository,
-                fileStorageService
+                fileStorageService,
+                ingestionJobService
         );
 
         Document document = Document.builder()
@@ -71,6 +75,7 @@ class VersionServiceTests {
         databaseOrder.verify(versionRepository).markPreviousVersionsNotCurrent(42L);
         databaseOrder.verify(versionRepository).save(any(DocumentVersion.class));
         databaseOrder.verify(documentRepository).update(document);
+        verify(ingestionJobService).createPendingJobIfAbsent(42L, 101L);
         assertEquals(2, result.getVersionNumber());
         assertEquals(2, document.getCurrentVersion());
     }
@@ -80,10 +85,12 @@ class VersionServiceTests {
         DocumentVersionRepository versionRepository = mock(DocumentVersionRepository.class);
         DocumentRepository documentRepository = mock(DocumentRepository.class);
         FileStorageService fileStorageService = mock(FileStorageService.class);
+        IngestionJobService ingestionJobService = mock(IngestionJobService.class);
         VersionService service = new VersionService(
                 versionRepository,
                 documentRepository,
-                fileStorageService
+                fileStorageService,
+                ingestionJobService
         );
         Document document = Document.builder()
                 .id(42L)
@@ -113,6 +120,7 @@ class VersionServiceTests {
 
         assertThrows(RuntimeException.class, () -> service.uploadNewVersion(42L, file, 9L));
         verify(fileStorageService).deleteFile(storedPath);
+        verify(ingestionJobService, never()).createPendingJobIfAbsent(any(), any());
     }
 
     @Test
@@ -120,10 +128,12 @@ class VersionServiceTests {
         DocumentVersionRepository versionRepository = mock(DocumentVersionRepository.class);
         DocumentRepository documentRepository = mock(DocumentRepository.class);
         FileStorageService fileStorageService = mock(FileStorageService.class);
+        IngestionJobService ingestionJobService = mock(IngestionJobService.class);
         VersionService service = new VersionService(
                 versionRepository,
                 documentRepository,
-                fileStorageService
+                fileStorageService,
+                ingestionJobService
         );
 
         Document document = Document.builder()
