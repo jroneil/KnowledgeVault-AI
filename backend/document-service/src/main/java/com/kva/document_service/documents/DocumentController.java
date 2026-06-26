@@ -1,6 +1,8 @@
 package com.kva.document_service.documents;
 
 import com.kva.document_service.auth.AuthenticatedUserService;
+import com.kva.document_service.documents.dto.BulkUploadDocumentRequest;
+import com.kva.document_service.documents.dto.BulkUploadResponse;
 import com.kva.document_service.documents.dto.DocumentUploadResponse;
 import com.kva.document_service.documents.dto.UpdateDocumentRequest;
 import com.kva.document_service.documents.dto.UploadDocumentRequest;
@@ -29,6 +31,7 @@ import java.util.Map;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final BulkDocumentUploadService bulkDocumentUploadService;
     private final VersionService versionService;
     private final AuthenticatedUserService authenticatedUserService;
 
@@ -85,6 +88,17 @@ public class DocumentController {
         DocumentUploadResponse response = documentService.uploadDocument(metadata, file, userId);
 
         log.info("Document uploaded: {} by user: {}", response.getDocumentId(), userId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping(value = "/bulk-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR')")
+    public ResponseEntity<BulkUploadResponse> bulkUploadDocuments(
+            @Valid @RequestPart("metadata") BulkUploadDocumentRequest metadata,
+            @RequestPart("files") MultipartFile[] files,
+            Authentication authentication) {
+        Long userId = authenticatedUserService.requireUserId(authentication);
+        BulkUploadResponse response = bulkDocumentUploadService.uploadDocuments(metadata, files, userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

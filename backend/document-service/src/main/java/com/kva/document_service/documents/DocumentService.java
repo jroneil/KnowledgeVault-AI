@@ -39,9 +39,31 @@ public class DocumentService {
     public DocumentUploadResponse uploadDocument(UploadDocumentRequest request,
                                                 MultipartFile file,
                                                 Long userId) {
+        DocumentMetadata metadata = hasMetadata(request)
+                ? createMetadataFromRequest(request, null)
+                : null;
+        return uploadDocumentInternal(request.getCollectionId(), request.getTitle(), request.getDescription(), metadata, file, userId);
+    }
+
+    @Transactional
+    public DocumentUploadResponse uploadDocumentWithResolvedMetadata(Long collectionId,
+                                                                     String title,
+                                                                     String description,
+                                                                     DocumentMetadata metadata,
+                                                                     MultipartFile file,
+                                                                     Long userId) {
+        return uploadDocumentInternal(collectionId, title, description, metadata, file, userId);
+    }
+
+    private DocumentUploadResponse uploadDocumentInternal(Long collectionId,
+                                                          String title,
+                                                          String description,
+                                                          DocumentMetadata metadata,
+                                                          MultipartFile file,
+                                                          Long userId) {
         // Validate collection exists
-        Collection collection = collectionRepository.findById(request.getCollectionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Collection not found with id: " + request.getCollectionId()));
+        Collection collection = collectionRepository.findById(collectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Collection not found with id: " + collectionId));
 
         if (!collection.getIsActive()) {
             throw new BusinessException("Cannot upload to inactive collection: " + collection.getName());
@@ -57,8 +79,8 @@ public class DocumentService {
             // Create document record
             Document document = Document.builder()
                     .collectionId(collection.getId())
-                    .title(request.getTitle())
-                    .description(request.getDescription())
+                    .title(title)
+                    .description(description)
                     .status("ACTIVE")
                     .currentVersion(1)
                     .createdBy(userId)
@@ -91,8 +113,8 @@ public class DocumentService {
             log.info("Created version: {} for document: {}", savedVersion.getId(), savedDocument.getId());
 
             // Create metadata if provided
-            if (hasMetadata(request)) {
-                DocumentMetadata metadata = createMetadataFromRequest(request, savedDocument.getId());
+            if (metadata != null) {
+                metadata.setDocumentId(savedDocument.getId());
                 metadataRepository.save(metadata);
                 log.info("Created metadata for document: {}", savedDocument.getId());
             }
@@ -120,7 +142,7 @@ public class DocumentService {
                             storedFilePath, cleanupException);
                 }
             }
-            log.error("Failed to upload document: {}", request.getTitle(), e);
+            log.error("Failed to upload document: {}", title, e);
             throw new BusinessException("Failed to upload document: " + e.getMessage(), e);
         }
     }
@@ -221,7 +243,10 @@ public class DocumentService {
     private boolean hasMetadata(UploadDocumentRequest request) {
         return request.getProduct() != null || request.getRevision() != null ||
                request.getDepartment() != null || request.getManufacturer() != null ||
+               request.getModel() != null || request.getDocumentType() != null ||
+               request.getDocumentNumber() != null || request.getLanguage() != null ||
                request.getCategory() != null || request.getEffectiveDate() != null ||
+               request.getPublicationDate() != null || request.getPageCount() != null ||
                (request.getTags() != null && !request.getTags().isEmpty());
     }
 
@@ -244,14 +269,29 @@ public class DocumentService {
             }
         }
 
+        LocalDate publicationDate = null;
+        if (request.getPublicationDate() != null && !request.getPublicationDate().isEmpty()) {
+            try {
+                publicationDate = LocalDate.parse(request.getPublicationDate());
+            } catch (Exception e) {
+                log.warn("Invalid publication date format: {}", request.getPublicationDate());
+            }
+        }
+
         return DocumentMetadata.builder()
                 .documentId(documentId)
                 .product(request.getProduct())
                 .revision(request.getRevision())
                 .department(request.getDepartment())
                 .manufacturer(request.getManufacturer())
+                .model(request.getModel())
+                .documentType(request.getDocumentType())
+                .documentNumber(request.getDocumentNumber())
+                .language(request.getLanguage())
                 .category(request.getCategory())
                 .effectiveDate(effectiveDate)
+                .publicationDate(publicationDate)
+                .pageCount(request.getPageCount())
                 .tags(tagsList)
                 .build();
     }

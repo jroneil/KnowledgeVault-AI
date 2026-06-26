@@ -28,7 +28,13 @@ public class UploadDocumentRequest {
     private String revision;
     private String department;
     private String manufacturer;
+    private String model;
+    private String documentType;
+    private String documentNumber;
+    private String language;
     private String category;
     private String effectiveDate;
+    private String publicationDate;
+    private Integer pageCount;
     private String tags; // Comma-separated tags
 }
