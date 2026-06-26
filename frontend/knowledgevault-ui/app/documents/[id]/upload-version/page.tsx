@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../../context/AuthContext'
+import { IngestionJob, listDocumentIngestionJobs, uploadVersion } from '../../../../lib/api'
 
 export default function UploadVersionPage() {
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [ingestionJobs, setIngestionJobs] = useState<IngestionJob[]>([])
   const { apiFetch, token } = useAuth()
   const router = useRouter()
   const params = useParams()
@@ -39,26 +41,17 @@ export default function UploadVersionPage() {
     setUploading(true)
     setError('')
     setSuccess(false)
+    setIngestionJobs([])
 
     try {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await apiFetch(
-        `/api/v1/documents/${documentId}/versions`,
-        {
-          method: 'POST',
-          body: formData
-        }
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.message || 'Upload failed')
-      }
-
+      const uploadResponse = await uploadVersion(apiFetch, documentId, formData)
       setSuccess(true)
       setFile(null)
+      const jobs = await listDocumentIngestionJobs(apiFetch, documentId).catch(() => [])
+      setIngestionJobs(jobs.filter(job => job.versionId === uploadResponse.versionId))
       
       // Redirect after 2 seconds
       setTimeout(() => {
@@ -92,6 +85,23 @@ export default function UploadVersionPage() {
       {success && (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
           Version uploaded successfully! Redirecting to version history...
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-900 px-4 py-3 rounded mb-4">
+          <div className="font-medium">Ingestion status</div>
+          {ingestionJobs.length === 0 ? (
+            <div className="text-sm mt-1">No ingestion job information is available yet.</div>
+          ) : (
+            <div className="mt-2 space-y-2 text-sm">
+              {ingestionJobs.map(job => (
+                <div key={job.id}>
+                  Job #{job.id}: {job.status} ({job.progressPercent ?? 0}%)
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,32 +1,24 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../context/AuthContext'
-
-interface Document {
-  id: number
-  collectionId: number
-  title: string
-  description: string
-  status: string
-  currentVersion: number
-  createdAt: string
-  updatedAt: string
-}
+import { Collection, DocumentSummary, listCollections, listDocuments } from '../../lib/api'
 
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<Document[]>([])
+  const [documents, setDocuments] = useState<DocumentSummary[]>([])
+  const [collections, setCollections] = useState<Collection[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { apiFetch, token } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
-  const [collectionFilter, setCollectionFilter] = useState('ALL')
+  const [collectionFilter, setCollectionFilter] = useState(searchParams.get('collectionId') ?? 'ALL')
 
   useEffect(() => {
     if (!token) {
@@ -34,13 +26,14 @@ export default function DocumentsPage() {
       return
     }
     let cancelled = false
-    apiFetch('/api/v1/documents')
-      .then(async response => {
-        if (!response.ok) throw new Error('Failed to fetch documents')
-        return response.json()
-      })
-      .then(data => {
-        if (!cancelled) setDocuments(data.documents ?? data)
+    Promise.all([
+      listDocuments(apiFetch, {}),
+      listCollections(apiFetch)
+    ])
+      .then(([documentData, collectionData]) => {
+        if (cancelled) return
+        setDocuments(documentData.documents)
+        setCollections(collectionData)
       })
       .catch(err => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'An error occurred')
@@ -182,9 +175,11 @@ export default function DocumentsPage() {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="ALL">All Collections</option>
-              {/* In real app, would fetch collections dynamically */}
-              <option value="1">Collection 1</option>
-              <option value="2">Collection 2</option>
+              {collections.map(collection => (
+                <option key={collection.id} value={String(collection.id)}>
+                  {collection.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>

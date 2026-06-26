@@ -1,15 +1,10 @@
 package com.kva.document_service.search;
 
-import com.kva.document_service.documents.Document;
-import com.kva.document_service.documents.DocumentRepository;
 import com.kva.document_service.search.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Controller for semantic search and RAG functionality.
@@ -21,66 +16,29 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SemanticSearchController {
 
+    private final SemanticSearchService semanticSearchService;
+    private final RagAnswerService ragAnswerService;
     private final AISearchClient aiSearchClient;
-    private final DocumentRepository documentRepository;
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public SemanticSearchResponse semanticSearch(@RequestBody SemanticSearchRequest request) {
         log.info("Semantic search request: query='{}', limit={}, threshold={}", 
             request.getQuery(), request.getLimit(), request.getThreshold());
-
-        try {
-            // Call AI service for semantic search
-            SemanticSearchResponse response = aiSearchClient.semanticSearch(request);
-
-            // Enrich results with document metadata
-            if (response.getResults() != null) {
-                Set<Long> documentIds = response.getResults().stream()
-                    .map(ChunkResult::getDocumentId)
-                    .collect(Collectors.toSet());
-
-                Map<Long, Document> documentMap = new HashMap<>();
-                for (Long docId : documentIds) {
-                    documentRepository.findById(docId).ifPresent(doc -> documentMap.put(docId, doc));
-                }
-
-                // Add document titles to results
-                response.getResults().forEach(chunk -> {
-                    Document doc = documentMap.get(chunk.getDocumentId());
-                    if (doc != null) {
-                        // We could add document title here if needed
-                        // For now, we keep the response structure simple
-                    }
-                });
-            }
-
-            log.info("Semantic search completed: {} results found", response.getTotalResults());
-            return response;
-
-        } catch (Exception e) {
-            log.error("Error performing semantic search: {}", e.getMessage(), e);
-            throw new RuntimeException("Semantic search failed: " + e.getMessage());
-        }
+        SemanticSearchResponse response = semanticSearchService.search(request);
+        log.info("Semantic search completed: {} results found", response.getTotalResults());
+        return response;
     }
 
     @PostMapping("/rag")
     @PreAuthorize("hasAnyAuthority('ADMIN', 'CONTRIBUTOR', 'VIEWER')")
     public RAGResponse ragQuery(@RequestBody RAGRequest request) {
         log.info("RAG query request: query='{}', topK={}", request.getQuery(), request.getTopK());
-
-        try {
-            // Call AI service for RAG query
-            RAGResponse response = aiSearchClient.ragQuery(request);
-
-            log.info("RAG query completed: {} contexts retrieved, {} characters in answer", 
-                response.getTotalContexts(), response.getAnswer().length());
-            return response;
-
-        } catch (Exception e) {
-            log.error("Error performing RAG query: {}", e.getMessage(), e);
-            throw new RuntimeException("RAG query failed: " + e.getMessage());
-        }
+        RAGResponse response = ragAnswerService.answer(request);
+        log.info("RAG query completed: {} contexts retrieved, {} characters in answer",
+                response.getTotalContexts(),
+                response.getAnswer() == null ? 0 : response.getAnswer().length());
+        return response;
     }
 
     @GetMapping("/stats")

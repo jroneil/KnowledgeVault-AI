@@ -4,35 +4,19 @@ import { useCallback, useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../context/AuthContext'
-
-interface Document {
-  id: number
-  collectionId: number
-  title: string
-  description: string
-  status: string
-  currentVersion: number
-  createdAt: string
-  updatedAt: string
-}
-
-interface DocumentMetadata {
-  id: number
-  documentId: number
-  product: string
-  revision: string
-  department: string
-  manufacturer: string
-  tags: string[]
-  category: string
-  effectiveDate: string
-  createdAt: string
-  updatedAt: string
-}
+import {
+  DocumentMetadata,
+  DocumentSummary,
+  IngestionJob,
+  getDocument,
+  getDocumentMetadata,
+  listDocumentIngestionJobs,
+} from '../../../lib/api'
 
 export default function DocumentDetailPage() {
-  const [document, setDocument] = useState<Document | null>(null)
+  const [document, setDocument] = useState<DocumentSummary | null>(null)
   const [metadata, setMetadata] = useState<DocumentMetadata | null>(null)
+  const [jobs, setJobs] = useState<IngestionJob[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const { apiFetch, token } = useAuth()
@@ -42,21 +26,14 @@ export default function DocumentDetailPage() {
 
   const fetchDocumentData = useCallback(async () => {
     try {
-      const docResponse = await apiFetch(`/api/v1/documents/${documentId}`)
-
-      if (!docResponse.ok) {
-        throw new Error('Failed to fetch document')
-      }
-
-      const docData = await docResponse.json()
+      const [docData, metaData, jobData] = await Promise.all([
+        getDocument(apiFetch, documentId),
+        getDocumentMetadata(apiFetch, documentId),
+        listDocumentIngestionJobs(apiFetch, documentId).catch(() => []),
+      ])
       setDocument(docData)
-
-      const metaResponse = await apiFetch(`/api/v1/documents/${documentId}/metadata`)
-
-      if (metaResponse.ok) {
-        const metaData = await metaResponse.json()
-        setMetadata(metaData)
-      }
+      setMetadata(metaData)
+      setJobs(jobData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -316,6 +293,38 @@ export default function DocumentDetailPage() {
             View Versions
           </Link>
         </div>
+      </div>
+
+      <div className="mt-6 bg-white shadow-md rounded-lg p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Ingestion Status</h2>
+        {jobs.length === 0 ? (
+          <p className="text-gray-500">No ingestion jobs reported for this document yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {jobs.map(job => (
+              <div key={job.id} className="rounded-lg border border-gray-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">
+                      Job #{job.id} · Version ID {job.versionId}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      Status: {job.status} · Progress: {job.progressPercent ?? 0}%
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-gray-500">
+                    {job.updatedAt ? `Updated ${new Date(job.updatedAt).toLocaleString()}` : 'Pending update'}
+                  </div>
+                </div>
+                {(job.errorMessage || job.lastErrorMessage) && (
+                  <div className="mt-2 text-sm text-red-600">
+                    {job.errorMessage || job.lastErrorMessage}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

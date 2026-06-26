@@ -5,30 +5,23 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
-/**
- * Context retrieved from search for RAG.
- */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RAGContext {
-    private Long chunkId;
+public class RAGCitation {
+    private String label;
     private Long documentId;
     private String documentTitle;
     private Long versionId;
     private Integer versionNumber;
     private String revision;
-    private String product;
-    private String category;
-    private List<String> tags;
-    private Integer chunkIndex;
-    private String content;
     private Integer pageNumber;
     private Integer sourcePageFrom;
     private Integer sourcePageTo;
-    private String sourceLabel;
+    private Long chunkId;
+    private Integer chunkIndex;
+    private Integer rank;
     private Double similarityScore;
+    private String sourceLabel;
 }
